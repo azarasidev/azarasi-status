@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>あざらしSMP サーバーステータス</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #e8eaf0; font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+         background: radial-gradient(1100px 480px at 50% -120px, #14304a 0%, rgba(20,48,74,0) 60%), #070b14; min-height: 100vh; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 14px 44px; }
+  header { padding: 30px 8px 4px; text-align: center; }
+  header h1 { margin: 0; font-size: 21px; color: #f2f7ff; }
+  header p { color: #8b96b0; margin: 9px 0 0; font-size: 12.5px; }
+  .badge { display: inline-block; background: #7a4b12; color: #ffd9a0; border-radius: 999px; padding: 3px 12px; font-size: 12px; margin-top: 10px; }
+  /* 全体ステータスバナー */
+  .banner { margin-top: 22px; border-radius: 16px; padding: 22px 20px; text-align: center; border: 1px solid #26304f;
+            background: linear-gradient(180deg, #101a2e, #0c1424); }
+  .banner .big { font-size: 24px; font-weight: 800; letter-spacing: .04em; }
+  .banner .sub { color: #9aa7c2; font-size: 12.5px; margin-top: 8px; }
+  .banner.ok { border-color: #1f6f43; box-shadow: 0 0 24px rgba(46,204,113,.14); }
+  .banner.ok .big { color: #4ade80; }
+  .banner.partial { border-color: #8a6d1f; box-shadow: 0 0 24px rgba(250,204,21,.12); }
+  .banner.partial .big { color: #facc15; }
+  .banner.down { border-color: #8a2b2b; box-shadow: 0 0 24px rgba(248,113,113,.14); }
+  .banner.down .big { color: #f87171; }
+  .banner.unknown .big { color: #9aa7c2; }
+  /* サービスカード */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+  .card { background: linear-gradient(180deg, #111a2e, #0c1424); border: 1px solid #232c47; border-radius: 15px; padding: 16px; }
+  .card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .svc-name { font-size: 16.5px; font-weight: 700; color: #f2f5ff; }
+  .chip { flex-shrink: 0; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 4px 11px; }
+  .chip.ok { background: rgba(46,204,113,.16); color: #4ade80; border: 1px solid rgba(74,222,128,.5); }
+  .chip.ng { background: rgba(248,113,113,.14); color: #f87171; border: 1px solid rgba(248,113,113,.5); }
+  .chip.unk { background: rgba(154,167,194,.12); color: #9aa7c2; border: 1px solid rgba(154,167,194,.4); }
+  .meta { display: flex; gap: 16px; margin-top: 12px; color: #9aa7c2; font-size: 12.5px; flex-wrap: wrap; }
+  .meta b { color: #dfe6ff; font-weight: 700; }
+  .uptime-head { display: flex; justify-content: space-between; margin-top: 14px; font-size: 11.5px; color: #7c87a0; }
+  .bar { display: flex; gap: 2px; margin-top: 6px; }
+  .seg { flex: 1; height: 22px; border-radius: 3px; background: #2a3350; }
+  .seg.full { background: #2ecc71; }
+  .seg.part { background: #facc15; }
+  .seg.low { background: #f87171; }
+  .seg.none { background: #232c47; }
+  /* お知らせ */
+  .section-title { margin: 30px 0 4px; font-size: 15px; letter-spacing: .12em; color: #c9d2e8; text-align: center; }
+  .notice { background: #0c1424; border: 1px solid #232c47; border-left: 5px solid #41538a; border-radius: 11px; padding: 13px 15px; margin-top: 10px; }
+  .notice.maintenance { border-left-color: #facc15; }
+  .notice.incident { border-left-color: #f87171; }
+  .notice .nhead { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .notice .kind { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 2px 8px; background: rgba(90,120,255,.16); color: #aeb9ff; }
+  .notice.maintenance .kind { background: rgba(250,204,21,.14); color: #facc15; }
+  .notice.incident .kind { background: rgba(248,113,113,.14); color: #f87171; }
+  .notice .ntitle { font-weight: 700; font-size: 14.5px; color: #f2f5ff; }
+  .notice .ndate { color: #7c87a0; font-size: 12px; }
+  .notice .nbody { color: #c3cbdf; font-size: 13.5px; margin-top: 7px; line-height: 1.65; white-space: pre-wrap; }
+  .empty { color: #8b96b0; text-align: center; padding: 22px 0 6px; font-size: 13.5px; }
+  footer { text-align: center; color: #525c74; font-size: 11.5px; padding: 26px 0 6px; line-height: 1.9; }
+  @media (max-width: 480px) { .banner .big { font-size: 19px; } header h1 { font-size: 17px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>🦭 あざらしSMP サーバーステータス</h1>
+  <p id="updated">読み込み中…</p>
+  <div id="demo"></div>
+</header>
+<section class="banner unknown" id="banner">
+  <div class="big">確認中</div>
+  <div class="sub">状態を取得しています</div>
+</section>
+<main class="cards" id="cards"></main>
+<h2 class="section-title">— お知らせ —</h2>
+<section id="notices"></section>
+<footer>
+  接続先 (Java版): smp.azarasi.f5.si ／ 統合版: フレンド AzarasiSRV を追加して参加<br>
+  AzarasiSMP サーバー稼働状況 — 5分ごとに自動確認しています
+</footer>
+</div>
+<script>
+// ===== デプロイ時に置換される接続先 =====
+// 読み取り専用トークンなので、ページに埋め込んで公開しても問題ありません。
+var UPSTASH_URL = 'https://eminent-dove-220114.upstash.io';
+var UPSTASH_RO_TOKEN = 'ggAAAAAAA1vSAAIgcDLlQfyHuiXlZ4xv2G2JJXOMnTt51BsavfrbH2zgXv80ZQ';
+var PUBLIC_KEY = 'azarasi-status-public';
+var STALE_MS = 15 * 60 * 1000; // 15分以上前のデータは「確認中」扱い (Node 版と同じ)
+
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var OVERALL = {
+  ok: ['全サービス正常稼働中', 'すべてのサービスが正常に稼働しています'],
+  partial: ['一部障害発生中', '一部のサービスで障害が発生しています'],
+  down: ['障害発生中', 'サービスが停止しています'],
+  unknown: ['確認中', '状態を確認しています']
+};
+function segClass(pct) {
+  if (pct === null || pct === undefined) return 'none';
+  if (pct >= 99.9) return 'full';
+  if (pct >= 50) return 'part';
+  return 'low';
+}
+
+// ---- デモデータ (プレースホルダ未置換のときに表示。Node 版の demoData と同じ内容) ----
+var JST_OFFSET = 9 * 3600 * 1000;
+function jstDayKey(tsMs) { return new Date(tsMs + JST_OFFSET).toISOString().slice(0, 10); }
+function dayKeyDaysAgo(n) { return jstDayKey(Date.now() - n * 24 * 3600 * 1000); }
+function demoData() {
+  var now = Date.now();
+  var services = [
+    { id: 'smp', name: 'あざらしSMP', online: true, players: 7, maxPlayers: 100, latencyMs: 23 },
+    { id: 'lobby', name: 'ロビー', online: true, players: null, maxPlayers: null, latencyMs: 23 },
+    { id: 'pvp', name: 'あざらしPvP', online: true, players: 3, maxPlayers: 100, latencyMs: 31 },
+    { id: 'site', name: '公式サイト', online: true, players: null, maxPlayers: null, latencyMs: 120 }
+  ];
+  var days = [];
+  for (var i = 29; i >= 0; i--) {
+    // 6日前だけ部分障害があった風のサンプル
+    days.push({ date: dayKeyDaysAgo(i), pct: i === 6 ? 82.6 : 100 });
+  }
+  return {
+    demo: true,
+    checkedAt: new Date(now).toISOString(),
+    stale: false,
+    overall: 'ok',
+    services: services.map(function(s) {
+      var c = Object.assign({}, s); c.uptimePct30d = 99.7; c.days = days; return c;
+    }),
+    announcements: [
+      { id: 'demo1', at: new Date(now - 2 * 3600 * 1000).toISOString(), kind: 'info', title: 'ステータスページを公開しました', body: '各サーバーの稼働状況をこのページで確認できます。（これはデモ表示です）' }
+    ]
+  };
+}
+
+function render(d) {
+  document.getElementById('updated').textContent = d.checkedAt
+    ? '最終確認: ' + new Date(d.checkedAt).toLocaleString('ja-JP') + (d.stale ? '（情報が古くなっています）' : '')
+    : 'チェッカーからのデータ待ち';
+  document.getElementById('demo').innerHTML = d.demo ? '<span class="badge">デモデータ表示中（チェッカー未接続）</span>' : '';
+  var banner = document.getElementById('banner');
+  var ov = OVERALL[d.overall] || OVERALL.unknown;
+  banner.className = 'banner ' + (d.overall || 'unknown');
+  banner.innerHTML = '<div class="big">' + ov[0] + '</div><div class="sub">' + ov[1] + '</div>';
+  document.getElementById('cards').innerHTML = d.services.map(function(s) {
+    var chip, cls;
+    if (d.stale || s.online === null || s.online === undefined) { chip = '確認中'; cls = 'unk'; }
+    else if (s.online) { chip = '正常稼働中'; cls = 'ok'; }
+    else { chip = '障害発生中'; cls = 'ng'; }
+    var meta = '';
+    if (s.players !== null && s.players !== undefined) meta += '<span>プレイヤー <b>' + s.players + (s.maxPlayers ? ' / ' + s.maxPlayers : '') + '</b></span>';
+    if (s.latencyMs !== null && s.latencyMs !== undefined) meta += '<span>応答 <b>' + Math.round(s.latencyMs) + ' ms</b></span>';
+    if (!meta) meta = '<span>—</span>';
+    var segs = (s.days || []).map(function(day) {
+      return '<div class="seg ' + segClass(day.pct) + '" title="' + day.date + ': ' + (day.pct === null ? 'データなし' : day.pct + '%') + '"></div>';
+    }).join('');
+    var up = (s.uptimePct30d !== null && s.uptimePct30d !== undefined) ? s.uptimePct30d : s.uptimePct;
+    return '<div class="card"><div class="card-top"><div class="svc-name">' + esc(s.name) + '</div>' +
+      '<span class="chip ' + cls + '">' + chip + '</span></div>' +
+      '<div class="meta">' + meta + '</div>' +
+      '<div class="uptime-head"><span>過去30日間の稼働率</span><span>' + (up === null || up === undefined ? '—' : up + '%') + '</span></div>' +
+      '<div class="bar">' + segs + '</div></div>';
+  }).join('');
+  var kindLabel = { info: 'お知らせ', maintenance: 'メンテナンス', incident: '障害情報' };
+  var box = document.getElementById('notices');
+  if (!d.announcements || d.announcements.length === 0) {
+    box.innerHTML = '<div class="empty">お知らせはありません</div>';
+  } else {
+    box.innerHTML = d.announcements.map(function(a) {
+      return '<article class="notice ' + esc(a.kind) + '"><div class="nhead">' +
+        '<span class="kind">' + (kindLabel[a.kind] || 'お知らせ') + '</span>' +
+        '<span class="ntitle">' + esc(a.title) + '</span>' +
+        '<span class="ndate">' + new Date(a.at).toLocaleString('ja-JP') + '</span></div>' +
+        (a.body ? '<div class="nbody">' + esc(a.body) + '</div>' : '') + '</article>';
+    }).join('');
+  }
+}
+
+function load() {
+  // プレースホルダが残っている = まだデプロイ設定が済んでいないのでデモ表示
+  if (UPSTASH_URL.indexOf('__UPSTASH') === 0 || UPSTASH_RO_TOKEN.indexOf('__UPSTASH') === 0) {
+    render(demoData());
+    return;
+  }
+  // 公開ドキュメントを Upstash REST から直接読む ({result: "文字列化JSON"} の二重パース)
+  fetch(UPSTASH_URL.replace(/\/+$/, '') + '/get/' + PUBLIC_KEY, {
+    headers: { Authorization: 'Bearer ' + UPSTASH_RO_TOKEN }
+  }).then(function(r) { return r.json(); }).then(function(out) {
+    if (!out || !out.result) throw new Error('empty result');
+    var d = JSON.parse(out.result);
+    d.demo = false;
+    d.stale = !d.checkedAt || (Date.now() - Date.parse(d.checkedAt) > STALE_MS);
+    if (d.stale) d.overall = 'unknown';
+    render(d);
+  }).catch(function() {
+    document.getElementById('updated').textContent = '読み込みに失敗しました';
+  });
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
